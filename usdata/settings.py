@@ -16,7 +16,10 @@ DB_PORT = os.getenv('DB_PORT')
 BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = DJANGO_SECRET
 DEBUG = True
-ALLOWED_HOSTS = [DJANGO_HOST]
+ALLOWED_HOSTS = [
+    DJANGO_HOST,
+    'usdata.blended.kr'
+]
 
 INSTALLED_APPS = [
     'django.contrib.admin',

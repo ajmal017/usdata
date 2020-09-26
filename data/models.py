@@ -1,4 +1,33 @@
+from django.contrib.postgres.fields import ArrayField
 from django.db import models
+
+
+# all tickers done on that date
+class MetaDate(models.Model):
+    date = models.CharField(max_length=20, blank=True, null=True)
+    updated_date = models.CharField(max_length=30, blank=True, null=True)
+    tickers = ArrayField(models.CharField(max_length=30, blank=True, null=True))
+    price = ArrayField(models.CharField(max_length=30, blank=True, null=True))
+    general = ArrayField(models.CharField(max_length=30, blank=True, null=True))
+    highlights = ArrayField(models.CharField(max_length=30, blank=True, null=True))
+    valuation = ArrayField(models.CharField(max_length=30, blank=True, null=True))
+    shares_stats = ArrayField(models.CharField(max_length=30, blank=True, null=True))
+    esg_scores = ArrayField(models.CharField(max_length=30, blank=True, null=True))
+    earnings = ArrayField(models.CharField(max_length=30, blank=True, null=True))
+    financials = ArrayField(models.CharField(max_length=30, blank=True, null=True))
+
+
+# all dates done for that ticker
+class MetaData(models.Model):
+    ticker = models.CharField(max_length=30, blank=True, null=True)
+    price = ArrayField(models.CharField(max_length=20, blank=True, null=True))
+    general = ArrayField(models.CharField(max_length=20, blank=True, null=True))
+    highlights = ArrayField(models.CharField(max_length=20, blank=True, null=True))
+    valuation = ArrayField(models.CharField(max_length=20, blank=True, null=True))
+    shares_stats = ArrayField(models.CharField(max_length=20, blank=True, null=True))
+    esg_scores = ArrayField(models.CharField(max_length=20, blank=True, null=True))
+    earnings = ArrayField(models.CharField(max_length=20, blank=True, null=True))
+    financials = ArrayField(models.CharField(max_length=20, blank=True, null=True))
 
 
 class Tickers(models.Model):

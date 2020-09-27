@@ -9,6 +9,7 @@ from data.models import (
     MetaDate,
     MetaData,
     Tickers,
+    BulkPrice,
     Price,
     General,
     Highlights,
@@ -108,6 +109,26 @@ def sync_db_and_meta():
         print(f'[SYNC DB] ({cnt} / {ticker_cnt}) {ticker} synced : took {end - start}s')
         cnt += 1
 
+    
+def save_bulk_price():
+    save_tickers()
+
+    tickers = [d['Code'] for d in Tickers.objects.filter(date=today).first().tickers]
+    ticker_cnt = len(tickers)
+    send_slack('price', f'starting {today} price data save. Total tickers count: {ticker_cnt}')
+
+    cnt = 1
+    for ticker in tickers:
+        price_api = f'https://eodhistoricaldata.com/api/eod/{ticker}.US?fmt=json&api_token={api_token}'
+        res = requests.get(price_api)
+        res_json = res.json()
+        p = BulkPrice(code=ticker, data=res_json)
+        p.save()
+        if cnt % 250 == 0:
+            send_slack('price', f'({cnt}/{ticker_cnt}) PRICE DATA DONE')
+        print(f'({cnt}/{ticker_cnt}) PRICE DATA DONE')
+        cnt += 1
+
 
 def save_price():
     save_tickers()
@@ -118,20 +139,17 @@ def save_price():
 
     cnt = 1
     for ticker in tickers:
-        print(f'Start ticker: {ticker}')
         recent_update_date = redis_client.get('RECENT_UPDATE_DATE')
         if recent_update_date == None:
             recent_update_date = today
         else:
             recent_update_date = recent_update_date.decode('utf-8')
-        print(f'Recent update date: {recent_update_date}')
         ticker_done = get_list(redis_client, f'{ticker}_PRICE_DONE')
         ticker_error = get_list(redis_client, f'{ticker}_PRICE_ERROR')
         if (cnt == 1) and (len(ticker_done) == 0):
             sync_db_and_meta()
             ticker_done = get_list(redis_client, f'{ticker}_PRICE_DONE')
         if (cnt == 1) or (recent_update_date not in ticker_done):
-            print('Requesting data...')
             price_api = f'https://eodhistoricaldata.com/api/eod/{ticker}.US?fmt=json&api_token={api_token}'
             res = requests.get(price_api)
             res_json = res.json()
@@ -139,10 +157,9 @@ def save_price():
             data_points = []
             for data in res_json:
                 date = data['date'].replace('-', '')
-                if cnt == 1:
+                if (cnt == 1) and (recent_update_date < today):
                     redis_client.set('RECENT_UPDATE_DATE', date)
                 if date not in ticker_done:
-                    print('date not in ticker done adding...')
                     try:
                         p = Price(
                             code=ticker,
@@ -159,8 +176,6 @@ def save_price():
                     except:
                         add_to_list(redis_client, f'{ticker}_PRICE_ERROR', date)
             Price.objects.bulk_create(data_points)
-            print(data_points)
-            print('Data saved!')
         if cnt % 250 == 0:
             send_slack('price', f'({cnt}/{ticker_cnt}) PRICE DATA DONE')
         print(f'({cnt}/{ticker_cnt}) PRICE DATA DONE')

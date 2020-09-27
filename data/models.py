@@ -52,6 +52,14 @@ class Price(models.Model):
         return f'{self.date} {self.code}'
 
 
+class BulkPrice(models.Model):
+    code = models.CharField(max_length=50, blank=True, null=True)
+    data = models.JSONField(blank=True, null=True)
+
+    def __str__(self):
+        return self.code
+
+
 class General(models.Model):
     code = models.CharField(max_length=50, blank=True, null=True)
     name = models.CharField(max_length=50, blank=True, null=True)

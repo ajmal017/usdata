@@ -4,6 +4,7 @@ from data.models import (
     MetaDate,
     MetaData,
     Tickers,
+    BulkPrice,
     Price,
     General,
     Highlights,
@@ -17,6 +18,7 @@ from data.models import (
 admin.site.register(MetaDate)
 admin.site.register(MetaData)
 admin.site.register(Tickers)
+admin.site.register(BulkPrice)
 admin.site.register(Price)
 admin.site.register(General)
 admin.site.register(Highlights)

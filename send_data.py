@@ -119,11 +119,12 @@ def save_bulk_price():
 
     cnt = 1
     for ticker in tickers:
-        price_api = f'https://eodhistoricaldata.com/api/eod/{ticker}.US?fmt=json&api_token={api_token}'
-        res = requests.get(price_api)
-        res_json = res.json()
-        p = BulkPrice(code=ticker, data=res_json)
-        p.save()
+        if not BulkPrice.objects.filter(code=ticker).exists():
+            price_api = f'https://eodhistoricaldata.com/api/eod/{ticker}.US?fmt=json&api_token={api_token}'
+            res = requests.get(price_api)
+            res_json = res.json()
+            p = BulkPrice(code=ticker, data=res_json)
+            p.save()
         if cnt % 250 == 0:
             send_slack('price', f'({cnt}/{ticker_cnt}) PRICE DATA DONE')
         print(f'({cnt}/{ticker_cnt}) PRICE DATA DONE')
@@ -408,5 +409,5 @@ def save_financials():
 
 
 if __name__ == "__main__":
-    save_price()
+    save_bulk_price()
 

@@ -2,6 +2,7 @@ from django.shortcuts import render
 
 from data.models import (
     Tickers,
+    BulkPrice,
     Price,
     General,
     Highlights,
@@ -14,6 +15,7 @@ from data.models import (
 
 from data.serializers import (
     TickersSerializer,
+    BulkPriceSerializer,
     PriceSerializer,
     GeneralSerializer,
     HighlightsSerializer,
@@ -47,6 +49,21 @@ class TickersAPIView(generics.ListAPIView):
         date_by = self.request.GET.get('date')
         if date_by:
             queryset = queryset.filter(date=date_by)
+        return queryset
+
+
+class BulkPriceAPIView(generics.ListAPIView):
+    queryset = BulkPrice.objects.all()
+    serializer_class = BulkPriceSerializer
+    permission_classes = (permissions.AllowAny,)
+    pagination_class = StandardResultPagination
+    filter_backends = [SearchFilter, OrderingFilter]
+
+    def get_queryset(self, *args, **kwargs):
+        queryset = BulkPrice.objects.all().order_by('id')
+        code_by = self.request.GET.get('code')
+        if code_by:
+            queryset = queryset.filter(code=code_by)
         return queryset
 
 

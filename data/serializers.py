@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from data.models import (
     Tickers,
+    BulkPrice,
     Price,
     General,
     Highlights,
@@ -14,6 +15,11 @@ from data.models import (
 class TickersSerializer(serializers.ModelSerializer):
     class Meta:
         model = Tickers
+        fields = '__all__'
+
+class BulkPriceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BulkPrice
         fields = '__all__'
 
 class PriceSerializer(serializers.ModelSerializer):

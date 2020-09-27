@@ -2,6 +2,7 @@ from django.urls import path
 
 from data.views import (
     TickersAPIView,
+    BulkPriceAPIView
     PriceAPIView,
     GeneralAPIView,
     HighlightsAPIView,
@@ -17,6 +18,7 @@ from rest_framework.urlpatterns import format_suffix_patterns
 
 urlpatterns = [
     path('tickers/', TickersAPIView.as_view()),
+    path('raw-price/', BulkPriceAPIView.as_view()),
     path('price/', PriceAPIView.as_view()),
     path('general/', GeneralAPIView.as_view()),
     path('highlights/', HighlightsAPIView.as_view()),

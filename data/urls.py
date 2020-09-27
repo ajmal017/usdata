@@ -2,7 +2,7 @@ from django.urls import path
 
 from data.views import (
     TickersAPIView,
-    BulkPriceAPIView
+    BulkPriceAPIView,
     PriceAPIView,
     GeneralAPIView,
     HighlightsAPIView,

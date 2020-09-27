@@ -15,8 +15,8 @@ from data.models import (
     Financials
 )
 
-admin.site.register(MetaDate)
-admin.site.register(MetaData)
+# admin.site.register(MetaDate)
+# admin.site.register(MetaData)
 admin.site.register(Tickers)
 admin.site.register(BulkPrice)
 admin.site.register(Price)

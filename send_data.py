@@ -20,6 +20,7 @@ from data.models import (
 )
 
 from datetime import datetime
+import time
 import redis
 import requests
 import pandas as pd
@@ -62,17 +63,6 @@ api_token = os.getenv('API_TOKEN')
 slack = Slacker(SLACK_TOKEN)
 redis_client = cache_conn()
 
-tickers_key = 'TICKERS_RECORD'
-recent_date_key = 'RECENT_UPDATED_DATE'
-price_key = 'PRICE_RECORD'
-general_key = 'GENERAL_RECORD'
-highlights_key = 'HIGHLIGHTS_RECORD'
-valuation_key = 'VALUATION_RECORD'
-sharesstats_key = 'SHARESSTATS_RECORD'
-esgscores_key = 'ESGSCORES_RECORD'
-earnings_key = 'EARNINGS_RECORD'
-financials_key = 'FINANCIALS_RECORD'
-
 
 # Slack related functions
 def send_slack(task, msg):
@@ -87,52 +77,95 @@ def send_slack(task, msg):
 def save_tickers():
     ticker_list_api = f'https://eodhistoricaldata.com/api/exchange-symbol-list/US?fmt=json&api_token={api_token}'
 
-    meta_exists = MetaDate.objects.filter(date=today).exists()
-    data_exists = Tickers.objects.filter(date=today).exists()
-
-    print(meta_exists)
-    print(data_exists)
-    if not meta_exists:
-        print('meta does not exist')
-        meta_date = MetaDate(date=today)
-        if not data_exists:
-            res = requests.get(ticker_list_api)
-            print(res)
-            json_data = res.json()
-            t = Tickers(date=today, tickers=json_data)
-            t.save()
-            ticker_list = []
-            meta_data_list = []
-            for data in json_data:
-                code = data['Code']
-                ticker_list.append(code)
-                if not MetaData.objects.filter(ticker=code).exists():
-                    meta_data_list.append(MetaData(ticker=code))
-            print(meta_date)
-            meta_date.tickers = ticker_list
-            meta_date.save()
-            MetaData.objects.bulk_create(meta_data_list)
-            send_slack('tickers', f'saved {today} tickers')
-        else:
-            t = Tickers.objects.filter(date=today)
-            meta_date.tickers = t.tickers
-            meta_date.save()
-            meta_data_list = []
-            tickers = t.tickers
-            for code in tickers:
-                if not MetaData.objects.filter(ticker=code).exists():
-                    meta_data_list.append(MetaData(ticker=code))
-            MetaData.objects.bulk_create(meta_data_list)
-            send_slack('tickers', f'saved {today} tickers')
+    if not Tickers.objects.filter(date=today).exists():
+        res = requests.get(ticker_list_api)
+        t = Tickers(date=today, tickers=res.json())
+        t.save()
+        send_slack('tickers', f'Saved {today} tickers.')
     else:
-        send_slack('tickers', f'already saved {today} tickers')
+        send_slack('tickers', f'{today} tickers already exist.')
+
+
+# recent_update_date
+# ticker_done: [date, date, date]
+# ticker_error: [date, date, date]
+
+
+def sync_db_and_meta():
+    print('Syncing DB and cache Meta information')
+    db_tickers = list(Price.objects.values_list('code', flat=True).distinct())
+    ticker_cnt = len(db_tickers)
+    print(f'DB total tickers count: {ticker_cnt}')
+    
+    cnt = 1
+    for ticker in db_tickers:
+        start = time.time()
+        price_dates = list(Price.objects.filter(code=ticker).values_list('date', flat=True))
+        key_name = f'{ticker}_PRICE_DONE'
+        redis_client.delete(key_name)
+        set_list(redis_client, [key_name] + price_dates)
+        end = time.time()
+        print(f'[SYNC DB] ({cnt} / {ticker_cnt}) {ticker} synced : took {end - start}s')
+        cnt += 1
 
 
 def save_price():
     save_tickers()
-    tickers = MetaData.objects.filter(date=today).tickers
+
+    tickers = [d['Code'] for d in Tickers.objects.filter(date=today).first().tickers]
     ticker_cnt = len(tickers)
-    # send_slack('price', f'starting {today} price data save. Total tickers count: {ticker_cnt}')
+    send_slack('price', f'starting {today} price data save. Total tickers count: {ticker_cnt}')
+
+    cnt = 1
+    for ticker in tickers:
+        print(f'Start ticker: {ticker}')
+        recent_update_date = redis_client.get('RECENT_UPDATE_DATE')
+        if recent_update_date == None:
+            recent_update_date = today
+        else:
+            recent_update_date = recent_update_date.decode('utf-8')
+        print(f'Recent update date: {recent_update_date}')
+        ticker_done = get_list(redis_client, f'{ticker}_PRICE_DONE')
+        ticker_error = get_list(redis_client, f'{ticker}_PRICE_ERROR')
+        if (cnt == 1) and (len(ticker_done) == 0):
+            sync_db_and_meta()
+            ticker_done = get_list(redis_client, f'{ticker}_PRICE_DONE')
+        if (cnt == 1) or (recent_update_date not in ticker_done):
+            print('Requesting data...')
+            price_api = f'https://eodhistoricaldata.com/api/eod/{ticker}.US?fmt=json&api_token={api_token}'
+            res = requests.get(price_api)
+            res_json = res.json()
+
+            data_points = []
+            for data in res_json:
+                date = data['date'].replace('-', '')
+                if cnt == 1:
+                    redis_client.set('RECENT_UPDATE_DATE', date)
+                if date not in ticker_done:
+                    print('date not in ticker done adding...')
+                    try:
+                        p = Price(
+                            code=ticker,
+                            date=date,
+                            open_p=data['open'],
+                            high_p=data['high'],
+                            low_p=data['low'],
+                            close_p=data['close'],
+                            adj_close=data['adjusted_close'],
+                            volume=data['volume']
+                        )
+                        data_points.append(p)
+                        add_to_list(redis_client, f'{ticker}_PRICE_DONE', date)
+                    except:
+                        add_to_list(redis_client, f'{ticker}_PRICE_ERROR', date)
+            Price.objects.bulk_create(data_points)
+            print(data_points)
+            print('Data saved!')
+        if cnt % 250 == 0:
+            send_slack('price', f'({cnt}/{ticker_cnt}) PRICE DATA DONE')
+        print(f'({cnt}/{ticker_cnt}) PRICE DATA DONE')
+        cnt += 1
+
     
     # if redis_client.exists(price_key):
     #     price_list = get_list(redis_client, price_key)

@@ -62,7 +62,7 @@ class PriceAPIView(generics.ListAPIView):
         code_by = self.request.GET.get('code')
         date_by = self.request.GET.get('date')
         if code_by:
-            queryset = queryset.filter(date=code_by)
+            queryset = queryset.filter(code=code_by)
         if date_by:
             queryset = queryset.filter(date=date_by)
         return queryset
@@ -79,7 +79,7 @@ class GeneralAPIView(generics.ListAPIView):
         queryset = General.objects.all().order_by('id')
         code_by = self.request.GET.get('code')
         if code_by:
-            queryset = queryset.filter(date=code_by)
+            queryset = queryset.filter(code=code_by)
         return queryset
 
 
@@ -94,7 +94,7 @@ class HighlightsAPIView(generics.ListAPIView):
         queryset = Highlights.objects.all().order_by('id')
         code_by = self.request.GET.get('code')
         if code_by:
-            queryset = queryset.filter(date=code_by)
+            queryset = queryset.filter(code=code_by)
         return queryset
 
 
@@ -109,7 +109,7 @@ class ValuationAPIView(generics.ListAPIView):
         queryset = Valuation.objects.all().order_by('id')
         code_by = self.request.GET.get('code')
         if code_by:
-            queryset = queryset.filter(date=code_by)
+            queryset = queryset.filter(code=code_by)
         return queryset
 
 
@@ -124,7 +124,7 @@ class SharesStatsAPIView(generics.ListAPIView):
         queryset = SharesStats.objects.all().order_by('id')
         code_by = self.request.GET.get('code')
         if code_by:
-            queryset = queryset.filter(date=code_by)
+            queryset = queryset.filter(code=code_by)
         return queryset
 
 
@@ -139,7 +139,7 @@ class ESGScoresAPIView(generics.ListAPIView):
         queryset = ESGScores.objects.all().order_by('id')
         code_by = self.request.GET.get('code')
         if code_by:
-            queryset = queryset.filter(date=code_by)
+            queryset = queryset.filter(code=code_by)
         return queryset
 
 
@@ -154,7 +154,7 @@ class EarningsAPIView(generics.ListAPIView):
         queryset = Earnings.objects.all().order_by('id')
         code_by = self.request.GET.get('code')
         if code_by:
-            queryset = queryset.filter(date=code_by)
+            queryset = queryset.filter(code=code_by)
         return queryset
 
 
@@ -172,11 +172,11 @@ class FinancialsAPIView(generics.ListAPIView):
         financial_type_by = self.request.GET.get('financial_type')
         period_by = self.request.GET.get('period')
         if code_by:
-            queryset = queryset.filter(date=code_by)
+            queryset = queryset.filter(code=code_by)
         if date_by:
             queryset = queryset.filter(date=date_by)
         if financial_type_by:
-            queryset = queryset.filter(date=financial_type_by)
+            queryset = queryset.filter(financial_type=financial_type_by)
         if period_by:
-            queryset = queryset.filter(date=period_by)
+            queryset = queryset.filter(period=period_by)
         return queryset

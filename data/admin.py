@@ -12,7 +12,8 @@ from data.models import (
     SharesStats,
     ESGScores,
     Earnings,
-    Financials
+    Financials,
+    BulkFinancials
 )
 
 # admin.site.register(MetaDate)
@@ -27,3 +28,4 @@ admin.site.register(SharesStats)
 admin.site.register(ESGScores)
 admin.site.register(Earnings)
 admin.site.register(Financials)
+admin.site.register(BulkFinancials)

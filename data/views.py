@@ -10,7 +10,8 @@ from data.models import (
     SharesStats,
     ESGScores,
     Earnings,
-    Financials
+    Financials,
+    BulkFinancials
 )
 
 from data.serializers import (
@@ -23,12 +24,15 @@ from data.serializers import (
     SharesStatsSerializer,
     ESGScoresSerializer,
     EarningsSerializer,
-    FinancialsSerializer
+    FinancialsSerializer,
+    BulkFinancialsSerializer
 )
 
 from rest_framework import pagination
 from rest_framework import generics, permissions
 from rest_framework.filters import SearchFilter, OrderingFilter
+from rest_framework.response import Response
+from rest_framework.views import APIView
 
 
 class StandardResultPagination(pagination.PageNumberPagination):
@@ -37,19 +41,10 @@ class StandardResultPagination(pagination.PageNumberPagination):
     # max_page_size = 1000
 
 
-class TickersAPIView(generics.ListAPIView):
-    queryset = Tickers.objects.all()
-    serializer_class = TickersSerializer
-    permission_classes = (permissions.AllowAny,)
-    pagination_class = StandardResultPagination
-    filter_backends = [SearchFilter, OrderingFilter]
-
-    def get_queryset(self, *args, **kwargs):
-        queryset = Tickers.objects.all().order_by('id')
-        date_by = self.request.GET.get('date')
-        if date_by:
-            queryset = queryset.filter(date=date_by)
-        return queryset
+class TickersAPIView(APIView):
+    def get(self, request):
+        tickers = list(BulkPrice.objects.values_list('code', flat=True))
+        return Response({'tickers': tickers})
 
 
 class BulkPriceAPIView(generics.ListAPIView):
@@ -196,4 +191,19 @@ class FinancialsAPIView(generics.ListAPIView):
             queryset = queryset.filter(financial_type=financial_type_by)
         if period_by:
             queryset = queryset.filter(period=period_by)
+        return queryset
+
+
+class BulkFinancialsAPIView(generics.ListAPIView):
+    queryset = BulkFinancials.objects.all()
+    serializer_class = BulkFinancialsSerializer
+    permission_classes = (permissions.AllowAny,)
+    pagination_class = StandardResultPagination
+    filter_backends = [SearchFilter, OrderingFilter]
+
+    def get_queryset(self, *args, **kwargs):
+        queryset = BulkFinancials.objects.all().order_by('id')
+        code_by = self.request.GET.get('code')
+        if code_by:
+            queryset = queryset.filter(code=code_by)
         return queryset

@@ -60,40 +60,48 @@ class BulkPrice(models.Model):
         return self.code
 
 
-class General(models.Model):
+class BulkFinancials(models.Model):
     code = models.CharField(max_length=50, blank=True, null=True)
-    name = models.CharField(max_length=50, blank=True, null=True)
-    sec_type = models.CharField(max_length=50, blank=True, null=True)
-    exchange = models.CharField(max_length=50, blank=True, null=True)
-    currency_code = models.CharField(max_length=50, blank=True, null=True)
-    currency_name = models.CharField(max_length=50, blank=True, null=True)
-    currency_symbol = models.CharField(max_length=50, blank=True, null=True)
-    country_name = models.CharField(max_length=50, blank=True, null=True)
-    country_iso = models.CharField(max_length=50, blank=True, null=True)
-    isin = models.CharField(max_length=50, blank=True, null=True)
-    cusip = models.CharField(max_length=50, blank=True, null=True)
-    cik = models.CharField(max_length=50, blank=True, null=True)
-    employer_id_number = models.CharField(max_length=50, blank=True, null=True)
-    fiscal_year_end = models.CharField(max_length=50, blank=True, null=True)
-    ipo_date = models.CharField(max_length=50, blank=True, null=True)
-    international_domestic = models.CharField(max_length=50, blank=True, null=True)
-    sector = models.CharField(max_length=100, blank=True, null=True)
-    industry = models.CharField(max_length=100, blank=True, null=True)
-    gic_sector = models.CharField(max_length=100, blank=True, null=True)
-    gic_group = models.CharField(max_length=100, blank=True, null=True)
-    gic_industry = models.CharField(max_length=100, blank=True, null=True)
-    gic_subindustry = models.CharField(max_length=100, blank=True, null=True)
-    home_category = models.CharField(max_length=50, blank=True, null=True)
+    data = models.JSONField(blank=True, null=True)
+
+    def __str__(self):
+        return self.code
+
+
+class General(models.Model):
+    code = models.CharField(max_length=150, blank=True, null=True)
+    name = models.CharField(max_length=150, blank=True, null=True)
+    sec_type = models.CharField(max_length=150, blank=True, null=True)
+    exchange = models.CharField(max_length=150, blank=True, null=True)
+    currency_code = models.CharField(max_length=150, blank=True, null=True)
+    currency_name = models.CharField(max_length=150, blank=True, null=True)
+    currency_symbol = models.CharField(max_length=150, blank=True, null=True)
+    country_name = models.CharField(max_length=150, blank=True, null=True)
+    country_iso = models.CharField(max_length=150, blank=True, null=True)
+    isin = models.CharField(max_length=150, blank=True, null=True)
+    cusip = models.CharField(max_length=150, blank=True, null=True)
+    cik = models.CharField(max_length=150, blank=True, null=True)
+    employer_id_number = models.CharField(max_length=150, blank=True, null=True)
+    fiscal_year_end = models.CharField(max_length=150, blank=True, null=True)
+    ipo_date = models.CharField(max_length=150, blank=True, null=True)
+    international_domestic = models.CharField(max_length=150, blank=True, null=True)
+    sector = models.CharField(max_length=150, blank=True, null=True)
+    industry = models.CharField(max_length=150, blank=True, null=True)
+    gic_sector = models.CharField(max_length=150, blank=True, null=True)
+    gic_group = models.CharField(max_length=150, blank=True, null=True)
+    gic_industry = models.CharField(max_length=150, blank=True, null=True)
+    gic_subindustry = models.CharField(max_length=150, blank=True, null=True)
+    home_category = models.CharField(max_length=150, blank=True, null=True)
     is_delisted = models.BooleanField(blank=True, null=True)
     description = models.TextField(blank=True, null=True)
     address = models.CharField(max_length=150, blank=True, null=True)
     listings = models.JSONField(blank=True, null=True)
     officers = models.JSONField(blank=True, null=True)
-    phone = models.CharField(max_length=50, blank=True, null=True)
-    web_url = models.CharField(max_length=50, blank=True, null=True)
-    logo_url = models.CharField(max_length=50, blank=True, null=True)
-    fulltime_employee = models.CharField(max_length=50, blank=True, null=True)
-    updated_at = models.CharField(max_length=50, blank=True, null=True)
+    phone = models.CharField(max_length=150, blank=True, null=True)
+    web_url = models.CharField(max_length=150, blank=True, null=True)
+    logo_url = models.CharField(max_length=150, blank=True, null=True)
+    fulltime_employee = models.CharField(max_length=150, blank=True, null=True)
+    updated_at = models.CharField(max_length=150, blank=True, null=True)
 
     def __str__(self):
         return f'{self.updated_at}: [{self.code}] {self.name}'

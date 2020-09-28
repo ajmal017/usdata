@@ -17,9 +17,13 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = DJANGO_SECRET
 DEBUG = True
 ALLOWED_HOSTS = [
+    '127.0.0.1',
+    '127.0.0.0',
+    'localhost',
     DJANGO_HOST,
     'usdata.blended.kr'
 ]
+CORS_ORIGIN_ALLOW_ALL = True
 
 INSTALLED_APPS = [
     'django.contrib.admin',

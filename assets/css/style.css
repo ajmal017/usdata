@@ -1,0 +1,298 @@
+:root {
+  --text: #1a1e26;
+  --shade: #f0f0f0;
+  --text-shade: #5e636e;
+}
+
+* {
+  padding: 0;
+  margin: 0;
+  box-sizing: boder-box;
+}
+
+html {
+  font-size: 62.5%;
+  font-family: "Noto Sans KR", sans-serif;
+  color: var(--text);
+}
+
+a {
+  text-decoration: none;
+  color: var(--text);
+}
+
+.grid {
+  display: grid;
+  grid-template:
+    "header header header"
+    "main main main"
+    "footer footer footer"
+    / 1fr 8fr 1fr;
+}
+
+.container {
+  width: 80%;
+}
+
+header {
+  grid-area: header;
+  padding: 2rem 0;
+  border-bottom: 1px solid var(--shade);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+header .container {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+header .menu {
+  display: flex;
+}
+
+header .logo {
+  font-size: 2rem;
+  font-weight: 100;
+  cursor: pointer;
+}
+
+header .menu .action {
+  margin-top: 1rem;
+  font-size: 2rem;
+  font-weight: 100;
+}
+
+header .menu .pro-btn {
+  background: var(--text-shade);
+  color: #74b9ff;
+  padding: 0 1rem;
+  border-radius: 5px;
+  margin-right: 2rem;
+}
+
+main {
+  grid-area: main;
+}
+
+main .container {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+main .banner {
+  width: 100%;
+  background-image: url("../img/stock.jpg");
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+}
+
+main .banner .filter {
+  width: 100%;
+  padding: 10rem 0;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.9) 30%,
+    rgba(255, 255, 255, 0.4) 100%
+  );
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+main .banner .intro {
+  font-size: 2.5rem;
+  font-weight: 100;
+  margin-bottom: 2rem;
+  background: linear-gradient(to top, #81ecec 40%, transparent 40%);
+}
+
+main .banner form {
+  display: flex;
+  align-items: center;
+}
+
+main .banner form #search-input {
+  width: 20rem;
+  height: 3rem;
+  border: none;
+  outline: none;
+  padding-left: 1rem;
+  font-size: 1.5rem;
+  font-weight: 100;
+}
+
+main .banner form input[type="submit"] {
+  width: 6rem;
+  height: 3rem;
+  background: var(--text-shade);
+  color: white;
+  border-radius: 0;
+  outline: none;
+  border: none;
+  cursor: pointer;
+}
+
+main .tickers {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 2rem 0;
+}
+
+#tickers-container {
+  width: 80%;
+}
+
+#tickers-container p {
+  font-size: 2rem;
+  font-weight: 100;
+}
+
+#tickers-container .updated {
+  margin-top: 1rem;
+  font-size: 1.8rem;
+  font-weight: 100;
+}
+
+#tickers-container .updated span {
+  border-bottom: 1px solid var(--text);
+}
+
+#tickers-container .tickers-list {
+  margin-bottom: 2rem;
+  background: var(--shade);
+}
+
+#tickers-container .tickers-list .ticker {
+  padding: 1rem;
+  font-size: 1.5rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+#tickers-container .tickers-list .ticker:hover {
+  background: #a29bfe;
+}
+
+main .content {
+  width: 80%;
+  font-weight: 100;
+}
+
+main .content h3 {
+  font-size: 2.5rem;
+}
+
+main .content .card {
+  margin-top: 1.5rem;
+  font-size: 2rem;
+  font-weight: 100;
+  cursor: pointer;
+  border: 1px solid var(--shade);
+  border-radius: 5px;
+  padding: 1.5rem;
+}
+
+main .content .card .title {
+  font-size: 2.3rem;
+}
+
+main .content .card .subtitle {
+  font-size: 1.8rem;
+  color: var(--text-shade);
+}
+
+main .content .card .summary {
+  margin: 1rem 0;
+  font-size: 1.8rem;
+}
+
+main .content .card a {
+  margin-top: 1rem;
+  font-size: 1.5rem;
+  font-weight: 400;
+  transition: all 0.3s ease-out;
+}
+
+main .content .card a:hover {
+  color: var(--text-shade);
+}
+
+@media only screen and (min-width: 401px) and (max-width: 960px) {
+  .grid {
+    display: grid;
+    grid-template:
+      "header header header"
+      "main main main"
+      "footer footer footer"
+      / 1.5fr 7fr 1.5fr;
+  }
+
+  .container {
+    width: 70%;
+  }
+
+  header .container {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  header .menu .action {
+    margin-top: 0;
+  }
+
+  #tickers-container {
+    width: 70%;
+  }
+
+  main .content {
+    width: 70%;
+  }
+}
+
+@media only screen and (min-width: 961px) {
+  .grid {
+    display: grid;
+    grid-template:
+      "header header header"
+      "main main main"
+      "footer footer footer"
+      / 2fr 6fr 2fr;
+  }
+
+  .container {
+    width: 60%;
+  }
+
+  header .container {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  header .menu .action {
+    margin-top: 0;
+  }
+
+  #tickers-container {
+    width: 60%;
+  }
+
+  main .content {
+    width: 60%;
+  }
+}

@@ -17,9 +17,11 @@ from data.models import (
     SharesStats,
     ESGScores,
     Earnings,
-    Financials
+    Financials,
+    BulkFinancials
 )
 
+import sys
 from datetime import datetime
 import time
 import redis
@@ -55,7 +57,9 @@ def add_to_list(redis_client, key, data):
     response = redis_client.rpush(key, data)
     return response # returns 1 or 0
 
-today = datetime.today().strftime('%Y%m%d')
+skip_num = int(sys.argv[1]) if len(sys.argv) >= 2 else 1
+
+today = datetime.today().strftime('%Y-%m-%d')
 
 cache_host = os.getenv('CACHE_HOST')
 cache_pw = os.getenv('CACHE_PW')
@@ -78,18 +82,13 @@ def send_slack(task, msg):
 def save_tickers():
     ticker_list_api = f'https://eodhistoricaldata.com/api/exchange-symbol-list/US?fmt=json&api_token={api_token}'
 
-    if not Tickers.objects.filter(date=today).exists():
+    if not Tickers.objects.filter(date=today.replace('-', '')).exists():
         res = requests.get(ticker_list_api)
-        t = Tickers(date=today, tickers=res.json())
+        t = Tickers(date=today.replace('-', ''), tickers=res.json())
         t.save()
         send_slack('tickers', f'Saved {today} tickers.')
     else:
         send_slack('tickers', f'{today} tickers already exist.')
-
-
-# recent_update_date
-# ticker_done: [date, date, date]
-# ticker_error: [date, date, date]
 
 
 def sync_db_and_meta():
@@ -110,304 +109,360 @@ def sync_db_and_meta():
         cnt += 1
 
     
-def save_bulk_price():
+def save_bulk_data():
     save_tickers()
 
-    tickers = [d['Code'] for d in Tickers.objects.filter(date=today).first().tickers]
+    tickers = [d['Code'] for d in Tickers.objects.filter(date=today.replace('-', '')).first().tickers]
     ticker_cnt = len(tickers)
-    send_slack('price', f'starting {today} price data save. Total tickers count: {ticker_cnt}')
+    send_slack('data', f'starting {today} price data save. Total tickers count: {ticker_cnt}')
 
     cnt = 1
     for ticker in tickers:
-        if not BulkPrice.objects.filter(code=ticker).exists():
-            price_api = f'https://eodhistoricaldata.com/api/eod/{ticker}.US?fmt=json&api_token={api_token}'
-            res = requests.get(price_api)
-            res_json = res.json()
-            p = BulkPrice(code=ticker, data=res_json)
-            p.save()
+        if cnt > skip_num:
+            # price
+            if not BulkPrice.objects.filter(code=ticker).exists():
+                price_api = f'https://eodhistoricaldata.com/api/eod/{ticker}.US?fmt=json&api_token={api_token}'
+                res = requests.get(price_api)
+                res_json = res.json()
+                p = BulkPrice(code=ticker, data=res_json)
+                p.save()
+            else:
+                bulk_price = BulkPrice.objects.filter(code=ticker).first()
+                if (bulk_price.data[-1]['date'] != today):
+                    price_api = f'https://eodhistoricaldata.com/api/eod/{ticker}.US?fmt=json&api_token={api_token}'
+                    res = requests.get(price_api)
+                    res_json = res.json()
+                    BulkPrice.objects.filter(code=ticker).update(data=res_json)
+            # financials
+            save_financials(ticker)
         if cnt % 250 == 0:
-            send_slack('price', f'({cnt}/{ticker_cnt}) PRICE DATA DONE')
-        print(f'({cnt}/{ticker_cnt}) PRICE DATA DONE')
+            send_slack('data', f'({cnt}/{ticker_cnt}) DATA DONE')
+        print(f'({cnt}/{ticker_cnt}) {ticker} DATA DONE')
         cnt += 1
 
 
-def save_price():
-    save_tickers()
-
-    tickers = [d['Code'] for d in Tickers.objects.filter(date=today).first().tickers]
-    ticker_cnt = len(tickers)
-    send_slack('price', f'starting {today} price data save. Total tickers count: {ticker_cnt}')
-
-    cnt = 1
-    for ticker in tickers:
-        recent_update_date = redis_client.get('RECENT_UPDATE_DATE')
-        if recent_update_date == None:
-            recent_update_date = today
-        else:
-            recent_update_date = recent_update_date.decode('utf-8')
-        ticker_done = get_list(redis_client, f'{ticker}_PRICE_DONE')
-        ticker_error = get_list(redis_client, f'{ticker}_PRICE_ERROR')
-        if (cnt == 1) and (len(ticker_done) == 0):
-            sync_db_and_meta()
-            ticker_done = get_list(redis_client, f'{ticker}_PRICE_DONE')
-        if (cnt == 1) or (recent_update_date not in ticker_done):
-            price_api = f'https://eodhistoricaldata.com/api/eod/{ticker}.US?fmt=json&api_token={api_token}'
-            res = requests.get(price_api)
-            res_json = res.json()
-
-            data_points = []
-            for data in res_json:
-                date = data['date'].replace('-', '')
-                if (cnt == 1) and (recent_update_date < today):
-                    redis_client.set('RECENT_UPDATE_DATE', date)
-                if date not in ticker_done:
-                    try:
-                        p = Price(
-                            code=ticker,
-                            date=date,
-                            open_p=data['open'],
-                            high_p=data['high'],
-                            low_p=data['low'],
-                            close_p=data['close'],
-                            adj_close=data['adjusted_close'],
-                            volume=data['volume']
-                        )
-                        data_points.append(p)
-                        add_to_list(redis_client, f'{ticker}_PRICE_DONE', date)
-                    except:
-                        add_to_list(redis_client, f'{ticker}_PRICE_ERROR', date)
-            Price.objects.bulk_create(data_points)
-        if cnt % 250 == 0:
-            send_slack('price', f'({cnt}/{ticker_cnt}) PRICE DATA DONE')
-        print(f'({cnt}/{ticker_cnt}) PRICE DATA DONE')
-        cnt += 1
-
-    
-    # if redis_client.exists(price_key):
-    #     price_list = get_list(redis_client, price_key)
-    #     if (price_list[0] != today):
-    #         done_price_list = [price_key, today]
-    #         set_list(redis_client, done_price_list)
-    #     else:
-    #         done_price_list = [price_key] + price_list
-    # else:
-    #     done_price_list = [price_key, today]
-    #     set_list(redis_client, done_price_list)
-
-    # cnt = 1
-    # for ticker in tickers:
-    #     if ticker not in done_price_list:
-    #         existing_dates = [d.date for d in Price.objects.filter(code=ticker).all()]
-    #         max_date = max(existing_dates) if len(existing_dates) != 0 else today
-
-    #         if not redis_client.exists(recent_date_key):
-    #             redis_client.set(recent_date_key, max_date)
-
-    #         cached_recent_date = redis_client.get(recent_date_key).decode('utf-8')
-
-    #         if (cnt == 1) or (cached_recent_date not in existing_dates):
-    #             price_api = f'https://eodhistoricaldata.com/api/eod/{ticker}.US?fmt=json&api_token={api_token}'
-    #             res = requests.get(price_api)
-    #             res_json = res.json()
-    #             data_points = []
-    #             saved_dates = []
-    #             for data in res_json:
-    #                 if data['date'].replace('-', '') not in existing_dates:
-    #                     p = Price(
-    #                         code=ticker,
-    #                         date=data['date'].replace('-', ''),
-    #                         open_p=data['open'],
-    #                         high_p=data['high'],
-    #                         low_p=data['low'],
-    #                         close_p=data['close'],
-    #                         adj_close=data['adjusted_close'],
-    #                         volume=data['volume']
-    #                     )
-    #                     data_points.append(p)
-    #                     saved_dates.append(data['date'].replace('-', ''))
-    #             Price.objects.bulk_create(data_points)
-    #             redis_client.set(recent_date_key, max(saved_dates))
-    #             done_price_list.append(ticker)
-    #             redis_client.delete(price_key)
-    #             set_list(redis_client, done_price_list)
-    #             if cnt % 250 == 0:
-    #                 send_slack('price', f'({cnt}/{ticker_cnt}) PRICE DATA DONE')
-    #             print(f'({cnt}/{ticker_cnt}) {ticker} DONE')
-    #             cnt += 1
-    #         else:
-    #             if cnt % 250 == 0:
-    #                 send_slack('price', f'({cnt}/{ticker_cnt}) PRICE DATA DONE')
-    #             print(f'({cnt}/{ticker_cnt}) {ticker} ALREADY DONE. SKIPPING...')
-    #             cnt += 1
-    #     else:
-    #         if cnt % 250 == 0:
-    #             send_slack('price', f'({cnt}/{ticker_cnt}) PRICE DATA DONE')
-    #         print(f'({cnt}/{ticker_cnt}) {ticker} ALREADY DONE. SKIPPING...')
-    #         cnt += 1
-
-def save_financials():
-    save_tickers()
-    tickers = [d['Code'] for d in Tickers.objects.filter(date=today)[0].tickers]
-    ticker = tickers[0]
-
+def save_financials(ticker):
     fundamental_api = f'https://eodhistoricaldata.com/api/fundamentals/{ticker}.US?fmt=json&api_token={api_token}'
     res = requests.get(fundamental_api)
     res_json = res.json()
 
-    general = res_json['General']
-    highlights = res_json['Highlights']
-    valuation = res_json['Valuation']
-    shares_stats = res_json['SharesStats']
-    esg_scores = res_json['ESGScores']
-    earnings = res_json['Earnings']
-    financials = res_json['Financials']
+    try:
+        general = res_json['General']
+    except:
+        general = None
+    
+    try:
+        highlights = res_json['Highlights']
+    except:
+        highlights = None
+
+    try:
+        valuation = res_json['Valuation']
+    except:
+        valuation = None
+
+    try:
+        shares_stats = res_json['SharesStats']
+    except:
+        shares_stats = None
+
+    try:
+        esg_scores = res_json['ESGScores']
+    except:
+        esg_scores = None
+
+    try:
+        earnings = res_json['Earnings']
+    except:
+        earnings = None
+
+    try:
+        financials = res_json['Financials']
+    except:
+        financials = None
     
     # General
-    g = General(
-        code=general['Code'],
-        name=general['Name'],
-        sec_type=general['Type'],
-        exchange=general['Exchange'],
-        currency_code=general['CurrencyCode'],
-        currency_name=general['CurrencyName'],
-        currency_symbol=general['CurrencySymbol'],
-        country_name=general['CountryName'],
-        country_iso=general['CountryISO'],
-        isin=general['ISIN'],
-        cusip=general['CUSIP'],
-        cik=general['CIK'],
-        employer_id_number=general['EmployerIdNumber'],
-        fiscal_year_end=general['FiscalYearEnd'],
-        ipo_date=general['IPODate'],
-        international_domestic=general['InternationalDomestic'],
-        sector=general['Sector'],
-        industry=general['Industry'],
-        gic_sector=general['GicSector'],
-        gic_group=general['GicGroup'],
-        gic_industry=general['GicIndustry'],
-        gic_subindustry=general['GicSubIndustry'],
-        home_category=general['HomeCategory'],
-        is_delisted=general['IsDelisted'],
-        description=general['Description'],
-        address=general['Address'],
-        listings=general['Listings'],
-        officers=general['Officers'],
-        phone=general['Phone'],
-        web_url=general['WebURL'],
-        logo_url=general['LogoURL'],
-        fulltime_employee=general['FullTimeEmployees'],
-        updated_at=general['UpdatedAt']
-    )
-    g.save()
+    if general != None:
+        if not General.objects.filter(code=ticker).exists():
+            g = General(
+                code=general.get('Code'),
+                name=general.get('Name'),
+                sec_type=general.get('Type'),
+                exchange=general.get('Exchange'),
+                currency_code=general.get('CurrencyCode'),
+                currency_name=general.get('CurrencyName'),
+                currency_symbol=general.get('CurrencySymbol'),
+                country_name=general.get('CountryName'),
+                country_iso=general.get('CountryISO'),
+                isin=general.get('ISIN'),
+                cusip=general.get('CUSIP'),
+                cik=general.get('CIK'),
+                employer_id_number=general.get('EmployerIdNumber'),
+                fiscal_year_end=general.get('FiscalYearEnd'),
+                ipo_date=general.get('IPODate'),
+                international_domestic=general.get('InternationalDomestic'),
+                sector=general.get('Sector'),
+                industry=general.get('Industry'),
+                gic_sector=general.get('GicSector'),
+                gic_group=general.get('GicGroup'),
+                gic_industry=general.get('GicIndustry'),
+                gic_subindustry=general.get('GicSubIndustry'),
+                home_category=general.get('HomeCategory'),
+                is_delisted=general.get('IsDelisted'),
+                description=general.get('Description'),
+                address=general.get('Address'),
+                listings=general.get('Listings'),
+                officers=general.get('Officers'),
+                phone=general.get('Phone'),
+                web_url=general.get('WebURL'),
+                logo_url=general.get('LogoURL'),
+                fulltime_employee=general.get('FullTimeEmployees'),
+                updated_at=general.get('UpdatedAt')
+            )
+            g.save()
+        else:
+            General.objects.filter(code=ticker).update(
+                code=general.get('Code'),
+                name=general.get('Name'),
+                sec_type=general.get('Type'),
+                exchange=general.get('Exchange'),
+                currency_code=general.get('CurrencyCode'),
+                currency_name=general.get('CurrencyName'),
+                currency_symbol=general.get('CurrencySymbol'),
+                country_name=general.get('CountryName'),
+                country_iso=general.get('CountryISO'),
+                isin=general.get('ISIN'),
+                cusip=general.get('CUSIP'),
+                cik=general.get('CIK'),
+                employer_id_number=general.get('EmployerIdNumber'),
+                fiscal_year_end=general.get('FiscalYearEnd'),
+                ipo_date=general.get('IPODate'),
+                international_domestic=general.get('InternationalDomestic'),
+                sector=general.get('Sector'),
+                industry=general.get('Industry'),
+                gic_sector=general.get('GicSector'),
+                gic_group=general.get('GicGroup'),
+                gic_industry=general.get('GicIndustry'),
+                gic_subindustry=general.get('GicSubIndustry'),
+                home_category=general.get('HomeCategory'),
+                is_delisted=general.get('IsDelisted'),
+                description=general.get('Description'),
+                address=general.get('Address'),
+                listings=general.get('Listings'),
+                officers=general.get('Officers'),
+                phone=general.get('Phone'),
+                web_url=general.get('WebURL'),
+                logo_url=general.get('LogoURL'),
+                fulltime_employee=general.get('FullTimeEmployees'),
+                updated_at=general.get('UpdatedAt')
+            )
 
     # Highlights
-    h = Highlights(
-        code=ticker,
-        market_capitalization=highlights['MarketCapitalization'],
-        market_capitalization_mln=highlights['MarketCapitalizationMln'],
-        ebitda=highlights['EBITDA'],
-        pe_ratio=highlights['PERatio'],
-        peg_ratio=highlights['PEGRatio'],
-        wallstreet_target_price=highlights['WallStreetTargetPrice'],
-        book_value=highlights['BookValue'],
-        dividend_share=highlights['DividendShare'],
-        dividend_yield=highlights['DividendYield'],
-        earnings_share=highlights['EarningsShare'],
-        eps_estimate_current_year=highlights['EPSEstimateCurrentYear'],
-        eps_estimate_next_year=highlights['EPSEstimateNextYear'],
-        eps_estimate_next_quarter=highlights['EPSEstimateNextQuarter'],
-        eps_estimate_current_quarter=highlights['EPSEstimateCurrentQuarter'],
-        most_recent_quarter=highlights['MostRecentQuarter'],
-        profit_margin=highlights['ProfitMargin'],
-        operating_margin_ttm=highlights['OperatingMarginTTM'],
-        roa_ttm=highlights['ReturnOnAssetsTTM'],
-        roe_ttm=highlights['ReturnOnEquityTTM'],
-        revenue_ttm=highlights['RevenueTTM'],
-        revenue_per_share_ttm=highlights['RevenuePerShareTTM'],
-        quarterly_revenue_growth_yoy=highlights['QuarterlyRevenueGrowthYOY'],
-        gross_profit_ttm=highlights['GrossProfitTTM'],
-        diluted_eps_ttm=highlights['DilutedEpsTTM'],
-        quarterly_earnings_growth_yoy=highlights['QuarterlyEarningsGrowthYOY']
-    )
-    h.save()
+    if highlights != None:
+        if not Highlights.objects.filter(code=ticker).exists():
+            h = Highlights(
+                code=ticker,
+                market_capitalization=highlights.get('MarketCapitalization'),
+                market_capitalization_mln=highlights.get('MarketCapitalizationMln'),
+                ebitda=highlights.get('EBITDA'),
+                pe_ratio=highlights.get('PERatio'),
+                peg_ratio=highlights.get('PEGRatio'),
+                wallstreet_target_price=highlights.get('WallStreetTargetPrice'),
+                book_value=highlights.get('BookValue'),
+                dividend_share=highlights.get('DividendShare'),
+                dividend_yield=highlights.get('DividendYield'),
+                earnings_share=highlights.get('EarningsShare'),
+                eps_estimate_current_year=highlights.get('EPSEstimateCurrentYear'),
+                eps_estimate_next_year=highlights.get('EPSEstimateNextYear'),
+                eps_estimate_next_quarter=highlights.get('EPSEstimateNextQuarter'),
+                eps_estimate_current_quarter=highlights.get('EPSEstimateCurrentQuarter'),
+                most_recent_quarter=highlights.get('MostRecentQuarter'),
+                profit_margin=highlights.get('ProfitMargin'),
+                operating_margin_ttm=highlights.get('OperatingMarginTTM'),
+                roa_ttm=highlights.get('ReturnOnAssetsTTM'),
+                roe_ttm=highlights.get('ReturnOnEquityTTM'),
+                revenue_ttm=highlights.get('RevenueTTM'),
+                revenue_per_share_ttm=highlights.get('RevenuePerShareTTM'),
+                quarterly_revenue_growth_yoy=highlights.get('QuarterlyRevenueGrowthYOY'),
+                gross_profit_ttm=highlights.get('GrossProfitTTM'),
+                diluted_eps_ttm=highlights.get('DilutedEpsTTM'),
+                quarterly_earnings_growth_yoy=highlights.get('QuarterlyEarningsGrowthYOY')
+            )
+            h.save()
+        else:
+            Highlights.objects.filter(code=ticker).update(
+                code=ticker,
+                market_capitalization=highlights.get('MarketCapitalization'),
+                market_capitalization_mln=highlights.get('MarketCapitalizationMln'),
+                ebitda=highlights.get('EBITDA'),
+                pe_ratio=highlights.get('PERatio'),
+                peg_ratio=highlights.get('PEGRatio'),
+                wallstreet_target_price=highlights.get('WallStreetTargetPrice'),
+                book_value=highlights.get('BookValue'),
+                dividend_share=highlights.get('DividendShare'),
+                dividend_yield=highlights.get('DividendYield'),
+                earnings_share=highlights.get('EarningsShare'),
+                eps_estimate_current_year=highlights.get('EPSEstimateCurrentYear'),
+                eps_estimate_next_year=highlights.get('EPSEstimateNextYear'),
+                eps_estimate_next_quarter=highlights.get('EPSEstimateNextQuarter'),
+                eps_estimate_current_quarter=highlights.get('EPSEstimateCurrentQuarter'),
+                most_recent_quarter=highlights.get('MostRecentQuarter'),
+                profit_margin=highlights.get('ProfitMargin'),
+                operating_margin_ttm=highlights.get('OperatingMarginTTM'),
+                roa_ttm=highlights.get('ReturnOnAssetsTTM'),
+                roe_ttm=highlights.get('ReturnOnEquityTTM'),
+                revenue_ttm=highlights.get('RevenueTTM'),
+                revenue_per_share_ttm=highlights.get('RevenuePerShareTTM'),
+                quarterly_revenue_growth_yoy=highlights.get('QuarterlyRevenueGrowthYOY'),
+                gross_profit_ttm=highlights.get('GrossProfitTTM'),
+                diluted_eps_ttm=highlights.get('DilutedEpsTTM'),
+                quarterly_earnings_growth_yoy=highlights.get('QuarterlyEarningsGrowthYOY')
+            )
 
 
     # Valuation
-    v = Valuation(
-        code=ticker,
-        trailing_pe=valuation['TrailingPE'],
-        forward_pe=valuation['ForwardPE'],
-        price_sales_ttm=valuation['PriceSalesTTM'],
-        price_book_mrq=valuation['PriceBookMRQ'],
-        enterprise_value_revenue=valuation['EnterpriseValueRevenue'],
-        enterprise_value_ebitda=valuation['EnterpriseValueEbitda']
-    )
-    v.save()
+    if valuation != None:
+        if not Valuation.objects.filter(code=ticker).exists():
+            v = Valuation(
+                code=ticker,
+                trailing_pe=valuation.get('TrailingPE'),
+                forward_pe=valuation.get('ForwardPE'),
+                price_sales_ttm=valuation.get('PriceSalesTTM'),
+                price_book_mrq=valuation.get('PriceBookMRQ'),
+                enterprise_value_revenue=valuation.get('EnterpriseValueRevenue'),
+                enterprise_value_ebitda=valuation.get('EnterpriseValueEbitda')
+            )
+            v.save()
+        else:
+            Valuation.objects.filter(code=ticker).update(
+                code=ticker,
+                trailing_pe=valuation.get('TrailingPE'),
+                forward_pe=valuation.get('ForwardPE'),
+                price_sales_ttm=valuation.get('PriceSalesTTM'),
+                price_book_mrq=valuation.get('PriceBookMRQ'),
+                enterprise_value_revenue=valuation.get('EnterpriseValueRevenue'),
+                enterprise_value_ebitda=valuation.get('EnterpriseValueEbitda')
+            )
 
     # SharesStats
-    s = SharesStats(
-        code=ticker,
-        shares_outstanding=shares_stats['SharesOutstanding'],
-        shares_float=shares_stats['SharesFloat'],
-        percent_insiders=shares_stats['PercentInsiders'],
-        percent_institutions=shares_stats['PercentInstitutions'],
-        shares_short=shares_stats['SharesShort'],
-        shares_short_prior_month=shares_stats['SharesShortPriorMonth'],
-        short_ratio=shares_stats['ShortRatio'],
-        short_percent_outstanding=shares_stats['ShortPercentOutstanding'],
-        short_percent_float=shares_stats['ShortPercentFloat']
-    )
-    s.save()
+    if shares_stats != None:
+        if not SharesStats.objects.filter(code=ticker).exists():
+            s = SharesStats(
+                code=ticker,
+                shares_outstanding=shares_stats.get('SharesOutstanding'),
+                shares_float=shares_stats.get('SharesFloat'),
+                percent_insiders=shares_stats.get('PercentInsiders'),
+                percent_institutions=shares_stats.get('PercentInstitutions'),
+                shares_short=shares_stats.get('SharesShort'),
+                shares_short_prior_month=shares_stats.get('SharesShortPriorMonth'),
+                short_ratio=shares_stats.get('ShortRatio'),
+                short_percent_outstanding=shares_stats.get('ShortPercentOutstanding'),
+                short_percent_float=shares_stats.get('ShortPercentFloat')
+            )
+            s.save()
+        else:
+            SharesStats.objects.filter(code=ticker).update(
+                code=ticker,
+                shares_outstanding=shares_stats.get('SharesOutstanding'),
+                shares_float=shares_stats.get('SharesFloat'),
+                percent_insiders=shares_stats.get('PercentInsiders'),
+                percent_institutions=shares_stats.get('PercentInstitutions'),
+                shares_short=shares_stats.get('SharesShort'),
+                shares_short_prior_month=shares_stats.get('SharesShortPriorMonth'),
+                short_ratio=shares_stats.get('ShortRatio'),
+                short_percent_outstanding=shares_stats.get('ShortPercentOutstanding'),
+                short_percent_float=shares_stats.get('ShortPercentFloat')
+            )
 
     # ESGScores
-    esg = ESGScores(
-        code=ticker,
-        rating_date=esg_scores['RatingDate'],
-        total_esg=esg_scores['TotalEsg'],
-        total_esg_percentile=esg_scores['TotalEsgPercentile'],
-        environment_score=esg_scores['EnvironmentScore'],
-        environment_score_percentile=esg_scores['EnvironmentScorePercentile'],
-        social_score=esg_scores['SocialScore'],
-        social_score_percentile=esg_scores['SocialScorePercentile'],
-        governance_score=esg_scores['GovernanceScore'],
-        governance_score_percentile=esg_scores['GovernanceScorePercentile'],
-        controversy_level=esg_scores['ControversyLevel'],
-        activities_involvement=esg_scores['ActivitiesInvolvement']
-    )
-    esg.save()
+    if esg_scores != None:
+        if not ESGScores.objects.filter(code=ticker).exists():
+            esg = ESGScores(
+                code=ticker,
+                rating_date=esg_scores.get('RatingDate'),
+                total_esg=esg_scores.get('TotalEsg'),
+                total_esg_percentile=esg_scores.get('TotalEsgPercentile'),
+                environment_score=esg_scores.get('EnvironmentScore'),
+                environment_score_percentile=esg_scores.get('EnvironmentScorePercentile'),
+                social_score=esg_scores.get('SocialScore'),
+                social_score_percentile=esg_scores.get('SocialScorePercentile'),
+                governance_score=esg_scores.get('GovernanceScore'),
+                governance_score_percentile=esg_scores.get('GovernanceScorePercentile'),
+                controversy_level=esg_scores.get('ControversyLevel'),
+                activities_involvement=esg_scores.get('ActivitiesInvolvement')
+            )
+            esg.save()
+        else:
+            ESGScores.objects.filter(code=ticker).update(
+                code=ticker,
+                rating_date=esg_scores.get('RatingDate'),
+                total_esg=esg_scores.get('TotalEsg'),
+                total_esg_percentile=esg_scores.get('TotalEsgPercentile'),
+                environment_score=esg_scores.get('EnvironmentScore'),
+                environment_score_percentile=esg_scores.get('EnvironmentScorePercentile'),
+                social_score=esg_scores.get('SocialScore'),
+                social_score_percentile=esg_scores.get('SocialScorePercentile'),
+                governance_score=esg_scores.get('GovernanceScore'),
+                governance_score_percentile=esg_scores.get('GovernanceScorePercentile'),
+                controversy_level=esg_scores.get('ControversyLevel'),
+                activities_involvement=esg_scores.get('ActivitiesInvolvement')
+            )
 
     # Earnings
-    e = Earnings(
-        code=ticker,
-        history=earnings['History'],
-        trend=earnings['Trend'],
-        annual=earnings['Annual']
-    )
-    e.save()
+    if earnings != None:
+        if not Earnings.objects.filter(code=ticker).exists():
+            e = Earnings(
+                code=ticker,
+                history=earnings.get('History'),
+                trend=earnings.get('Trend'),
+                annual=earnings.get('Annual')
+            )
+            e.save()
+        else:
+            Earnings.objects.filter(code=ticker).update(
+                code=ticker,
+                history=earnings.get('History'),
+                trend=earnings.get('Trend'),
+                annual=earnings.get('Annual')
+            )
 
     # Financials
-    for key in financials.keys():
-        f = Financials(
-            code=ticker,
-            date=today,
-            financial_type=key,
-            currency_symbol=financials[key]['currency_symbol'],
-            period='quarterly',
-            data=financials[key]['quarterly']
-        )
-        f.save()
+    if financials != None:
+        if not BulkFinancials.objects.filter(code=ticker).exists():
+            bf = BulkFinancials(
+                code=ticker,
+                data=financials
+            )
+            bf.save()
+        else:
+            BulkFinancials.objects.filter(code=ticker).update(
+                code=ticker,
+                data=financials
+            )
 
-        f2 = Financials(
-            code=ticker,
-            date=today,
-            financial_type=key,
-            currency_symbol=financials[key]['currency_symbol'],
-            period='yearly',
-            data=financials[key]['yearly']
-        )
-        f2.save()
+    # Financials
+    # for key in financials.keys():
+    #     f = Financials(
+    #         code=ticker,
+    #         date=today,
+    #         financial_type=key,
+    #         currency_symbol=financials[key]['currency_symbol'],
+    #         period='quarterly',
+    #         data=financials[key]['quarterly']
+    #     )
+    #     f.save()
+
+    #     f2 = Financials(
+    #         code=ticker,
+    #         date=today,
+    #         financial_type=key,
+    #         currency_symbol=financials[key]['currency_symbol'],
+    #         period='yearly',
+    #         data=financials[key]['yearly']
+    #     )
+    #     f2.save()
 
 
 if __name__ == "__main__":
-    save_bulk_price()
+    save_bulk_data()
 

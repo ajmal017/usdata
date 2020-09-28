@@ -9,7 +9,8 @@ from data.models import (
     SharesStats,
     ESGScores,
     Earnings,
-    Financials
+    Financials,
+    BulkFinancials
 )
 
 class TickersSerializer(serializers.ModelSerializer):
@@ -60,4 +61,9 @@ class EarningsSerializer(serializers.ModelSerializer):
 class FinancialsSerializer(serializers.ModelSerializer):
     class Meta:
         model = Financials
+        fields = '__all__'
+
+class BulkFinancialsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BulkFinancials
         fields = '__all__'

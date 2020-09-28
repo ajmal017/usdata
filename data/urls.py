@@ -10,7 +10,8 @@ from data.views import (
     SharesStatsAPIView,
     ESGScoresAPIView,
     EarningsAPIView,
-    FinancialsAPIView
+    FinancialsAPIView,
+    BulkFinancialsAPIView
 )
 
 
@@ -27,6 +28,7 @@ urlpatterns = [
     path('esg/', ESGScoresAPIView.as_view()),
     path('earnings/', EarningsAPIView.as_view()),
     path('financials/', FinancialsAPIView.as_view()),
+    path('raw-financials/', BulkFinancialsAPIView.as_view())
 ]
 
 urlpatterns = format_suffix_patterns(urlpatterns)
